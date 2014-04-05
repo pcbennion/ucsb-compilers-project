@@ -1,0 +1,187 @@
+%{
+    #include <stdio.h>
+    #include "ast.hpp"
+    #include "primitive.hpp"
+    #include "symtab.hpp"
+    #include "classhierarchy.hpp"
+    #define YYDEBUG 1
+    
+    extern Program_ptr ast;
+    int yylex(void);
+    void yyerror(const char *);
+%}
+
+/* Enables verbose error messages */
+%error-verbose
+
+    /* WRITE ME: put all your token definitions here */
+
+    %token VOID RETURN EXTEND PRINT INTTYPE BOOLTYPE IFTOK NOTTOK THENTOK ANDTOK ORTOK LTE TRUETOK FALSETOK
+
+    /* WRITE ME: put all your type definitions here */
+    %token <u_base_int> NUMBER
+    %token <u_base_charptr> VARID METHODID IDENTIFIER CLASSID
+    %type <u_program> Start
+    %type <u_class_list> Classes
+    %type <u_class> Class
+    %type <u_declaration_list> Properties Locals
+    %type <u_declaration> Property Local
+    %type <u_method_list> Methods
+    %type <u_method> Method
+    %type <u_methodbody> MethodB
+    %type <u_parameter_list> ParamList ParamListP
+    %type <u_parameter> Param
+    %type <u_variableid_list> Vars
+    %type <u_variableid> Var
+    %type <u_type> Rtype Type
+    %type <u_statement_list> Statements
+    %type <u_statement> Statement
+    %type <u_return> Return
+    %type <u_expression> Expression
+    %type <u_expression_list> ExpressionList ExpressionListP
+
+    /* WRITE ME: put all your precedence/associativity rules here */
+    %left ANDTOK
+    %right NOTTOK
+    %left '<' LTE
+    %left '+' '-'
+    %left '*' '/'
+
+    %%
+
+//  Program=============================================================Program=========================================
+
+    Start       : Classes                                               {$$ = new ProgramImpl($1); ast = $$; }
+                ;
+//  Class=List==========================================================Class=List======================================
+
+    Classes     : Classes Class                                         {$1->push_back($2); $$ = $1;}
+                | Class                                                 {$$ = new list<Class_ptr>(); $$->push_front($1);}
+                ;
+//  Class===============================================================Class===========================================
+
+    Class       : CLASSID EXTEND CLASSID '{' Properties Methods '}' ';' {$$ = new ClassImpl(new ClassIDImpl(new ClassName($1)), new ClassIDImpl(new ClassName($3)), $5, $6);}
+                | CLASSID '{' Properties Methods '}' ';'                {$$ = new ClassImpl(new ClassIDImpl(new ClassName($1)), NULL, $3, $4);}
+                ;
+//  Declaration=List====================================================Declaration=List================================
+
+    Properties  : Properties Property                                   {$1->push_back($2); $$ = $1;}
+                |                                                       {$$ = new list<Declaration_ptr>();}
+                ;
+//  Declaration=========================================================Declaration=====================================
+
+    Property    : Vars ':' Type ';'                                     {$$= new DeclarationImpl($1, $3);}
+                ;
+//  Method=List=========================================================Method=List=====================================
+
+    Methods     : Methods Method                                        {$1->push_back($2); $$ = $1;}
+                |                                                       {$$ = new list<Method_ptr>();}
+                ;
+//  Method==============================================================Method==========================================
+
+    Method      : METHODID '(' ParamList ')' ':' Rtype MethodB          {$$ = new MethodImpl(new MethodIDImpl(new SymName($1)), $3, $6, $7);}
+                ;
+//  Method=Body=========================================================Method=Body=====================================
+
+    MethodB     : '{' Locals Statements Return'}' ';'                   {$$ = new MethodBodyImpl($2, $3, $4);}
+                ;
+//  Parameter=List======================================================Parameter=List==================================
+
+    ParamList   : Param ParamListP                                      {$2->push_front($1); $$ = $2;}
+                |                                                       {$$ = new list<Parameter_ptr>();}
+                ;
+//  Parameter=List=After=Comma==========================================Parameter=List=After=Comma======================
+
+    ParamListP  : ',' Param ParamListP                                  {$3->push_front($2); $$ = $3;}
+                |                                                       {$$ = new list<Parameter_ptr>();}
+                ;
+//  Parameter===========================================================Parameter=======================================
+
+    Param       : Var ':' Type                                          {$$ = new ParameterImpl($1, $3);}
+                ;
+//  Local=Declaration=List==============================================Local=Declaration=List==========================
+
+    Locals      : Locals Local                                          {$1->push_back($2); $$ = $1;}
+                |                                                       {$$ = new list<Declaration_ptr>();}
+                ;
+//  Local=Declaration===================================================Local=Declaration===============================
+
+    Local       : Vars ':' Type ';'                                     {$$ = new DeclarationImpl($1, $3);}
+                ;
+//  Variable=ID=List====================================================Variable=ID=List================================
+
+    Vars        : Vars ',' Var                                          {$1->push_back($3); $$ = $1;}
+                | Var                                                   {$$ = new list<VariableID_ptr>(); $$->push_front($1);}
+                ;
+//  Variable=ID=========================================================Variable=ID=====================================
+
+    Var         : VARID                                                 {$$ = new VariableIDImpl(new SymName($1));}
+                ;
+//  Return=Type=========================================================Return=Type=====================================
+
+    Rtype       : INTTYPE                                               {$$ = new TInteger();}
+                | BOOLTYPE                                              {$$ = new TBoolean();}
+                | CLASSID                                               {$$ = new TObject(new ClassIDImpl(new ClassName($1)));}
+                | VOID                                                  {$$ = new TNothing();}
+                ;
+//  Type================================================================Type============================================
+
+    Type        : INTTYPE                                               {$$ = new TInteger();}
+                | BOOLTYPE                                              {$$ = new TBoolean();}
+                | CLASSID                                               {$$ = new TObject(new ClassIDImpl(new ClassName($1)));}
+                ;
+//  Statement=List======================================================Statement=List==================================
+
+    Statements  : Statements Statement ';'                              {$1->push_back($2); $$ = $1;}
+                |                                                       {$$ = new list<Statement_ptr>();}
+                ;
+//  Statement===========================================================Statement=======================================
+
+    Statement   : IDENTIFIER '=' Expression                             {$$ = new Assignment(new VariableIDImpl(new SymName($1)), $3);}
+                | PRINT Expression                                      {$$ = new Print($2);}
+                | IFTOK Expression THENTOK Statement                    {$$ = new If($2, $4);}
+                ;
+//  Return==============================================================Return==========================================
+
+    Return      : RETURN Expression ';'                                 {$$ = new ReturnImpl($2);}
+                | RETURN ';'                                            {$$ = new ReturnImpl(new Nothing());}
+                ;
+//  Expression==========================================================Expression======================================
+
+    Expression  : Expression '+' Expression                             {$$ = new Plus($1, $3);}
+                | Expression '-' Expression                             {$$ = new Minus($1, $3);}
+                | Expression '*' Expression                             {$$ = new Times($1, $3);}
+                | Expression '/' Expression                             {$$ = new Divide($1, $3);}
+                | Expression '<' Expression                             {$$ = new LessThan($1, $3);}
+                | Expression LTE Expression                             {$$ = new LessThanEqualTo($1, $3);}
+                | Expression ANDTOK Expression                          {$$ = new And($1, $3);}
+                | NOTTOK Expression                                     {$$ = new Not($2);}
+                | '-' Expression                                        {$$ = new UnaryMinus($2);}
+                | IDENTIFIER '.' METHODID '(' ExpressionList ')'        {$$ = new MethodCall(new VariableIDImpl(new SymName($1)), new MethodIDImpl(new SymName($3)), $5);}
+                | IDENTIFIER                                            {$$ = new Variable(new VariableIDImpl(new SymName($1)));}
+                | METHODID '('  ExpressionList ')'                      {$$ = new SelfCall(new MethodIDImpl(new SymName($1)), $3);}
+                | VARID                                                 {$$ = new Variable(new VariableIDImpl(new SymName($1)));}
+                | FALSETOK                                              {$$ = new BooleanLiteral(new Primitive(0));}
+                | TRUETOK                                               {$$ = new BooleanLiteral(new Primitive(1));}
+                | NUMBER                                                {$$ = new IntegerLiteral(new Primitive($1));}
+                ;
+//  Expression=List=====================================================Expression=List=================================
+
+    ExpressionList: Expression ExpressionListP                          {$2->push_front($1); $$ = $2;}
+                  |                                                     {$$ = new list<Expression_ptr>();}
+                  ;
+//  Expression=List=After=Comma=========================================Expression=List=After=Comma=====================
+
+    ExpressionListP: ',' Expression ExpressionListP                     {$3->push_front($2); $$ = $3;}
+                   |                                                    {$$ = new list<Expression_ptr>();}
+                   ;
+//  ====================================================================================================================
+
+%%
+
+extern int yylineno;
+
+void yyerror(const char *s) {
+  fprintf(stderr, "%s at line %d\n", s, yylineno);
+  exit(1);
+}

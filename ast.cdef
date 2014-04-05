@@ -1,0 +1,46 @@
+# CDEF file for lang
+
+Program ==> *Class
+Class ==> ClassID ClassID *Declaration *Method
+
+Declaration ==> *VariableID Type
+
+Method ==> MethodID *Parameter Type MethodBody
+MethodBody ==> *Declaration *Statement Return
+Parameter ==> VariableID Type
+
+Statement:Assignment ==> VariableID Expression
+Statement:If ==> Expression Statement
+Statement:Print ==> Expression
+Return ==> Expression
+
+Type:TInteger ==>
+Type:TBoolean ==>
+Type:TNothing ==>
+Type:TObject ==> ClassID
+
+ClassID ==> ClassName
+VariableID ==> SymName
+MethodID ==> SymName
+
+Expression:Plus ==> Expression Expression
+Expression:Minus ==> Expression Expression
+Expression:Times ==> Expression Expression
+Expression:Divide ==> Expression Expression
+Expression:And ==> Expression Expression
+Expression:LessThan ==> Expression Expression
+Expression:LessThanEqualTo ==> Expression Expression
+Expression:Not ==> Expression
+Expression:UnaryMinus ==> Expression
+Expression:MethodCall ==> VariableID MethodID *Expression
+Expression:SelfCall ==> MethodID *Expression
+Expression:Variable ==> VariableID
+Expression:IntegerLiteral ==> Primitive
+Expression:BooleanLiteral ==> Primitive
+Expression:Nothing ==>
+
+
+# these classes should not be generated automagically
+SymName external "symtab.hpp"
+Primitive external "primitive.hpp"
+ClassName external "classhierarchy.hpp"
